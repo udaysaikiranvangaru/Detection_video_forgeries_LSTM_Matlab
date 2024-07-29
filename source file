@@ -1,0 +1,56 @@
+% Load video
+video = VideoReader('input_video.mp4');
+
+% Extract frames
+frames = {};
+while hasFrame(video)
+    frames{end+1} = readFrame(video);
+end
+
+% Convert frames to grayscale (or any other preprocessing needed)
+processedFrames = cellfun(@(frame) rgb2gray(frame), frames, 'UniformOutput', false);
+% Example feature extraction (mean intensity of the frame)
+features = cellfun(@(frame) mean(frame(:)), processedFrames);
+
+% Reshape features to be [numFeatures, numTimeSteps, numObservations]
+numFeatures = 1; % mean intensity
+numTimeSteps = length(features);
+numObservations = 1; % single video
+X = reshape(features, [numFeatures, numTimeSteps, numObservations]);
+% Define LSTM network architecture
+layers = [ ...
+    sequenceInputLayer(numFeatures)
+    lstmLayer(100, 'OutputMode', 'sequence')
+    fullyConnectedLayer(2) % binary classification
+    softmaxLayer
+    classificationLayer
+];
+
+% Define training options
+options = trainingOptions('adam', ...
+    'MaxEpochs', 10, ...
+    'MiniBatchSize', 32, ...
+    'Shuffle', 'never', ...
+    'Plots', 'training-progress', ...
+    'Verbose', false);
+
+% Generate random labels for illustration (0: authentic, 1: forged)
+Y = categorical(randi([0, 1], [numTimeSteps, 1]));
+
+% Train the LSTM network
+net = trainNetwork(X, Y, layers, options);
+% Load and preprocess a new video
+newVideo = VideoReader('test_video.mp4');
+newFrames = {};
+while hasFrame(newVideo)
+    newFrames{end+1} = readFrame(newVideo);
+end
+newProcessedFrames = cellfun(@(frame) rgb2gray(frame), newFrames, 'UniformOutput', false);
+newFeatures = cellfun(@(frame) mean(frame(:)), newProcessedFrames);
+newX = reshape(newFeatures, [numFeatures, length(newFeatures), numObservations]);
+
+% Classify the new video
+YPred = classify(net, newX);
+
+% Display the result
+disp(YPred);
